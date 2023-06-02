@@ -1,9 +1,18 @@
 version: 2
+
+registries:
+    dotnet8:
+        type: nuget-feed
+        url: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet8/nuget/v3/index.json
+        token: ${{secrets.AZDO_FEED_TOKEN}}
+
 updates:
 
     - package-ecosystem: nuget
       directory: "/"
+      registries:
+          - dotnet8
       schedule:
-          interval: daily
+          interval: weekly
       allow:
           - dependency-name: "Microsoft.Extensions.DependencyModel"
