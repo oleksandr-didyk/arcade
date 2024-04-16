@@ -2,9 +2,9 @@
 
 Arcade SDK is a set of msbuild props and targets files and packages that provide common build features used across multiple repos, such as CI integration, packaging, VSIX and VS setup authoring, testing, and signing via Microbuild.
 
-The infrastructure of each [repository that contributes to .NET Core 3.0 stack](TierOneRepos.md) is built on top of Arcade SDK. This allows us to orchestrate the build of the entire stack as well as build the stack from source. These repositories are expected to be on the latest version of the Arcade SDK.
+The infrastructure of most repositories that contribute to the .NET stack is built on top of Arcade SDK. This allows us to orchestrate the build of the entire stack as well as build the stack from source. These repositories are expected to be on the latest version of the Arcade SDK.
 
-Repositories that do not participate in .NET Core 3.0 build may also use Arcade SDK in order to take advantage of the common infrastructure.
+Repositories that do not contribute to the .NET stack may also use Arcade SDK in order to take advantage of the common infrastructure.
 
 The goals are
 
@@ -425,6 +425,20 @@ Example
 
 Note: defining `runtimes` in your global.json will signal to Arcade to install a local version of the SDK for the runtimes to use rather than depending on a matching global SDK.
 
+We include `tools/dotnet` to install the SDK version requested and `sdk` to ensure that SDK (or a slightly newer one) is what's used in builds. we want that alignment to avoid unexpected issues, especially in servicing.
+
+```json
+{
+  "sdk": {
+    "version": "7.0.116",
+    "rollForward": "latestFeature"
+  },
+  "tools": {
+    "dotnet": "7.0.116"
+  }
+}
+```
+
 ### /NuGet.config
 
 `/NuGet.config` file is present and specifies the MyGet feed to retrieve Arcade SDK from and other feeds required by the repository like so:
@@ -629,7 +643,7 @@ The steps below assume the following variables to be defined:
 ### Signing plugin installation
 
 ```yml
-- task: MicroBuildSigningPlugin@3
+- task: MicroBuildSigningPlugin@4
   displayName: Install Signing Plugin
   inputs:
     signType: real
@@ -907,7 +921,7 @@ Available values are listed in [StrongName.targets](https://github.com/dotnet/ar
 
 `IsShipping-` properties are project properties that determine which (if any) assets produced by the project are _shipping_. An asset is considered _shipping_ if it is intended to be delivered to customers via an official channel. This channel can be NuGet.org, an official installer, etc. Setting this flag to `true` does not guarantee that the asset will actually ship in the next release of the product. It might be decided after the build is complete that although the artifact is ready for shipping it won't be shipped this release cycle.
 
-By default all assets produced by a project are considered _shipping_. Set `IsShipping` to `false` if none of the assets produced by the project are _shipping_. Test projects (`IsTestProject` is `true`) set `IsShipping` to `false` automatically.
+By default all assets produced by a project are considered _shipping_. Set `IsShipping` to `false` if none of the assets produced by the project are _shipping_. Test projects (`IsTestProject` is `true`) and test utility projects (`IsTestUtilityProject` is `true`) set `IsShipping` to `false` automatically.
 
 Setting `IsShipping` property is sufficient for most projects. Projects that produce both _shipping_ and _non-shipping_ assets need a finer grained control. Set `IsShippingAssembly`, `IsShippingPackage` or `IsShippingVsix` to `false` if the assembly, package, or VSIX produced by the project is not _shipping_, respectively. 
 
@@ -950,6 +964,10 @@ Properties that define TargetFramework for use by projects so their targeting ea
 - NetPrevious - The previously released version of .NET (e.g. this would be net7 if NetCurrent is net8)
 - NetMinimum - Lowest supported version of .NET the time of the release of NetCurrent. E.g. if NetCurrent is net8, then NetMinimum is net6
 - NetFrameworkMinimum - Lowest supported version of .NET Framework the time of the release of NetCurrent. E.g. if NetCurrent is net8, then NetFrameworkMinimum is net462
+
+### `IsTestUtilityProject` (bool)
+
+Set to `true` to indicate that the project is a test utility project. Such are projects that offer utilities to run tests. Example: `Microsoft.DotNet.XUnitExtensions.csproj` in Arcade. This makes are mark them as non-shipping and excluded from source build.
 
 ### `SkipTests` (bool)
 
@@ -1042,6 +1060,9 @@ If set to `true` the GetResourceString method is not included in the generated c
 
 #### `FlagNetStandard1XDependencies` (bool)
 If set to `true` the `FlagNetStandard1xDependencies` target validates that the dependency graph doesn't contain any netstandard1.x packages.
+
+#### `_OverrideArcadeInitializeBuildToolFramework` (string)
+If this environment variable is set, the value will be used to override the default Build Tools Framework version.
 
 <!-- Begin Generated Content: Doc Feedback -->
 <sub>Was this helpful? [![Yes](https://helix.dot.net/f/ip/5?p=Documentation%5CArcadeSdk.md)](https://helix.dot.net/f/p/5?p=Documentation%5CArcadeSdk.md) [![No](https://helix.dot.net/f/in)](https://helix.dot.net/f/n/5?p=Documentation%5CArcadeSdk.md)</sub>

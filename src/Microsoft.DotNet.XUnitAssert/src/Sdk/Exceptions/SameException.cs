@@ -2,29 +2,43 @@
 #nullable enable
 #endif
 
+using System;
+using System.Globalization;
+
 namespace Xunit.Sdk
 {
 	/// <summary>
-	/// Exception thrown when two object references are unexpectedly not the same instance.
+	/// Exception thrown when Assert.Same fails.
 	/// </summary>
 #if XUNIT_VISIBILITY_INTERNAL
 	internal
 #else
 	public
 #endif
-	class SameException : AssertActualExpectedException
+	partial class SameException : XunitException
 	{
-		/// <summary>
-		/// Creates a new instance of the <see cref="SameException"/> class.
-		/// </summary>
-		/// <param name="expected">The expected object reference</param>
-		/// <param name="actual">The actual object reference</param>
-#if XUNIT_NULLABLE
-		public SameException(object? expected, object? actual)
-#else
-		public SameException(object expected, object actual)
-#endif
-			: base(expected, actual, "Assert.Same() Failure")
+		SameException(string message) :
+			base(message)
 		{ }
+
+		/// <summary>
+		/// Creates a new instance of the <see cref="SameException"/> class to be thrown
+		/// when two values are not the same instance.
+		/// </summary>
+		/// <param name="expected">The expected value</param>
+		/// <param name="actual">The actual value</param>
+		public static SameException ForFailure(
+			string expected,
+			string actual) =>
+				new SameException(
+					string.Format(
+						CultureInfo.CurrentCulture,
+						"Assert.Same() Failure: Values are not the same instance{0}Expected: {1}{2}Actual:   {3}",
+						Environment.NewLine,
+						Assert.GuardArgumentNotNull(nameof(expected), expected),
+						Environment.NewLine,
+						Assert.GuardArgumentNotNull(nameof(actual), actual)
+					)
+				);
 	}
 }

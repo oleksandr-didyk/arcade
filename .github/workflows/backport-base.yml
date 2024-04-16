@@ -14,16 +14,21 @@ on:
           Backport of #%source_pr_number% to %target_branch%
 
           /cc %cc_users%
+      repository_owners:
+        description: 'A comma-separated list of repository owners where the workflow will run. Defaults to "dotnet,microsoft".'
+        required: false
+        type: string
+        default: 'dotnet,microsoft'
 
 jobs:
   cleanup:
-    if: ${{ github.repository_owner == 'dotnet' && github.event_name == 'schedule' }}
+    if: ${{ contains(format('{0},', inputs.repository_owners), format('{0},', github.repository_owner)) && github.event_name == 'schedule' }}
     runs-on: ubuntu-latest
     permissions:
       actions: write
     steps:
     - name: Cleanup workflow runs
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       with:
         script: |
           const repo_owner = context.payload.repository.owner.login;
@@ -57,7 +62,7 @@ jobs:
           }
 
   run_backport:
-    if: ${{ github.repository_owner == 'dotnet' && github.event.issue.pull_request != '' && contains(github.event.comment.body, '/backport to') }}
+    if: ${{ contains(format('{0},', inputs.repository_owners), format('{0},', github.repository_owner)) && github.event.issue.pull_request != '' && contains(github.event.comment.body, '/backport to') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -65,7 +70,7 @@ jobs:
       pull-requests: write
     steps:
     - name: Extract backport target branch
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       id: target-branch-extractor
       with:
         result-encoding: string
@@ -79,7 +84,7 @@ jobs:
 
           return target_branch[1];
     - name: Unlock comments if PR is locked
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       if: ${{ github.event.issue.locked == true }}
       with:
         script: |
@@ -90,7 +95,7 @@ jobs:
             repo: context.repo.repo,
           });
     - name: Post backport started comment to pull request
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       with:
         script: |
           const target_branch = '${{ steps.target-branch-extractor.outputs.result }}';
@@ -102,11 +107,11 @@ jobs:
             body: backport_start_body
           });
     - name: Checkout repo
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
     - name: Run backport
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       env:
         BACKPORT_PR_TITLE_TEMPLATE: ${{ inputs.pr_title_template }}
         BACKPORT_PR_DESCRIPTION_TEMPLATE: ${{ inputs.pr_description_template }}
@@ -241,7 +246,7 @@ jobs:
           }
  
     - name: Re-lock PR comments
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       if: ${{ github.event.issue.locked == true && (success() || failure()) }}
       with:
         script: |

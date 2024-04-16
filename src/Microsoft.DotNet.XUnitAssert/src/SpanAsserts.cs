@@ -5,6 +5,7 @@
 #endif
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Xunit.Sdk;
 
@@ -17,15 +18,12 @@ namespace Xunit
 #endif
 	partial class Assert
 	{
-		// NOTE: ref struct types (Span, ReadOnlySpan) are not Nullable, and thus there is no XUNIT_NULLABLE usage currently in this class
-		// This also means that null spans are identical to empty spans, (both in essence point to a 0 sized array of whatever type)
+		// While there is an implicit conversion operator from Span<T> to ReadOnlySpan<T>, the
+		// compiler still stumbles to do this automatically, which means we end up with lots of overloads
+		// with various arrangements of Span<T> and ReadOnlySpan<T>.
 
-		// NOTE: we could consider StartsWith<T> and EndsWith<T> and use the Span extension methods to check difference, but, the current
-		// Exceptions for StartsWith and EndsWith are only built for string types, so those would need a change (or new non-string versions created).
-
-		// NOTE: there is an implicit conversion operator on Span<T> to ReadOnlySpan<T> - however, I have found that the compiler sometimes struggles
-		// with identifying the proper methods to use, thus I have overloaded quite a few of the assertions in terms of supplying both
-		// Span and ReadOnlySpan based methods
+		// Also note that these classes will convert nulls into empty arrays automatically, since there
+		// is no way to represent a null readonly struct.
 
 		/// <summary>
 		/// Verifies that a span contains a given sub-span, using the default <see cref="StringComparison.CurrentCulture"/> comparison type.
@@ -123,7 +121,10 @@ namespace Xunit
 			StringComparison comparisonType = StringComparison.CurrentCulture)
 		{
 			if (actualSpan.IndexOf(expectedSubSpan, comparisonType) < 0)
-				throw new ContainsException(expectedSubSpan.ToString(), actualSpan.ToString());
+				throw ContainsException.ForSubStringNotFound(
+					expectedSubSpan.ToString(),
+					actualSpan.ToString()
+				);
 		}
 
 		/// <summary>
@@ -132,7 +133,12 @@ namespace Xunit
 		/// <param name="expectedSubSpan">The sub-span expected to be in the span</param>
 		/// <param name="actualSpan">The span to be inspected</param>
 		/// <exception cref="ContainsException">Thrown when the sub-span is not present inside the span</exception>
-		public static void Contains<T>(
+		public static void Contains<[DynamicallyAccessedMembers(
+					DynamicallyAccessedMemberTypes.PublicFields
+					| DynamicallyAccessedMemberTypes.NonPublicFields
+					| DynamicallyAccessedMemberTypes.PublicProperties
+					| DynamicallyAccessedMemberTypes.NonPublicProperties
+					| DynamicallyAccessedMemberTypes.PublicMethods)] T>(
 			Span<T> expectedSubSpan,
 			Span<T> actualSpan)
 				where T : IEquatable<T> =>
@@ -144,7 +150,12 @@ namespace Xunit
 		/// <param name="expectedSubSpan">The sub-span expected to be in the span</param>
 		/// <param name="actualSpan">The span to be inspected</param>
 		/// <exception cref="ContainsException">Thrown when the sub-span is not present inside the span</exception>
-		public static void Contains<T>(
+		public static void Contains<[DynamicallyAccessedMembers(
+					DynamicallyAccessedMemberTypes.PublicFields
+					| DynamicallyAccessedMemberTypes.NonPublicFields
+					| DynamicallyAccessedMemberTypes.PublicProperties
+					| DynamicallyAccessedMemberTypes.NonPublicProperties
+					| DynamicallyAccessedMemberTypes.PublicMethods)] T>(
 			Span<T> expectedSubSpan,
 			ReadOnlySpan<T> actualSpan)
 				where T : IEquatable<T> =>
@@ -156,7 +167,12 @@ namespace Xunit
 		/// <param name="expectedSubSpan">The sub-span expected to be in the span</param>
 		/// <param name="actualSpan">The span to be inspected</param>
 		/// <exception cref="ContainsException">Thrown when the sub-span is not present inside the span</exception>
-		public static void Contains<T>(
+		public static void Contains<[DynamicallyAccessedMembers(
+					DynamicallyAccessedMemberTypes.PublicFields
+					| DynamicallyAccessedMemberTypes.NonPublicFields
+					| DynamicallyAccessedMemberTypes.PublicProperties
+					| DynamicallyAccessedMemberTypes.NonPublicProperties
+					| DynamicallyAccessedMemberTypes.PublicMethods)] T>(
 			ReadOnlySpan<T> expectedSubSpan,
 			Span<T> actualSpan)
 				where T : IEquatable<T> =>
@@ -168,13 +184,21 @@ namespace Xunit
 		/// <param name="expectedSubSpan">The sub-span expected to be in the span</param>
 		/// <param name="actualSpan">The span to be inspected</param>
 		/// <exception cref="ContainsException">Thrown when the sub-span is not present inside the span</exception>
-		public static void Contains<T>(
+		public static void Contains<[DynamicallyAccessedMembers(
+					DynamicallyAccessedMemberTypes.PublicFields
+					| DynamicallyAccessedMemberTypes.NonPublicFields
+					| DynamicallyAccessedMemberTypes.PublicProperties
+					| DynamicallyAccessedMemberTypes.NonPublicProperties
+					| DynamicallyAccessedMemberTypes.PublicMethods)] T>(
 			ReadOnlySpan<T> expectedSubSpan,
 			ReadOnlySpan<T> actualSpan)
 				where T : IEquatable<T>
 		{
 			if (actualSpan.IndexOf(expectedSubSpan) < 0)
-				throw new ContainsException(expectedSubSpan.ToArray(), actualSpan.ToArray());
+				throw ContainsException.ForSubSpanNotFound(
+					CollectionTracker<T>.FormatStart(expectedSubSpan),
+					CollectionTracker<T>.FormatStart(actualSpan)
+				);
 		}
 
 		/// <summary>
@@ -272,8 +296,9 @@ namespace Xunit
 			ReadOnlySpan<char> actualSpan,
 			StringComparison comparisonType = StringComparison.CurrentCulture)
 		{
-			if (actualSpan.IndexOf(expectedSubSpan, comparisonType) > -1)
-				throw new DoesNotContainException(expectedSubSpan.ToString(), actualSpan.ToString());
+			var idx = actualSpan.IndexOf(expectedSubSpan, comparisonType);
+			if (idx > -1)
+				throw DoesNotContainException.ForSubStringFound(expectedSubSpan.ToString(), idx, actualSpan.ToString());
 		}
 
 		/// <summary>
@@ -282,7 +307,12 @@ namespace Xunit
 		/// <param name="expectedSubSpan">The sub-span expected not to be in the span</param>
 		/// <param name="actualSpan">The span to be inspected</param>
 		/// <exception cref="DoesNotContainException">Thrown when the sub-span is present inside the span</exception>
-		public static void DoesNotContain<T>(
+		public static void DoesNotContain<[DynamicallyAccessedMembers(
+					DynamicallyAccessedMemberTypes.PublicFields
+					| DynamicallyAccessedMemberTypes.NonPublicFields
+					| DynamicallyAccessedMemberTypes.PublicProperties
+					| DynamicallyAccessedMemberTypes.NonPublicProperties
+					| DynamicallyAccessedMemberTypes.PublicMethods)] T>(
 			Span<T> expectedSubSpan,
 			Span<T> actualSpan)
 				where T : IEquatable<T> =>
@@ -294,7 +324,12 @@ namespace Xunit
 		/// <param name="expectedSubSpan">The sub-span expected not to be in the span</param>
 		/// <param name="actualSpan">The span to be inspected</param>
 		/// <exception cref="DoesNotContainException">Thrown when the sub-span is present inside the span</exception>
-		public static void DoesNotContain<T>(
+		public static void DoesNotContain<[DynamicallyAccessedMembers(
+					DynamicallyAccessedMemberTypes.PublicFields
+					| DynamicallyAccessedMemberTypes.NonPublicFields
+					| DynamicallyAccessedMemberTypes.PublicProperties
+					| DynamicallyAccessedMemberTypes.NonPublicProperties
+					| DynamicallyAccessedMemberTypes.PublicMethods)] T>(
 			Span<T> expectedSubSpan,
 			ReadOnlySpan<T> actualSpan)
 				where T : IEquatable<T> =>
@@ -306,7 +341,12 @@ namespace Xunit
 		/// <param name="expectedSubSpan">The sub-span expected not to be in the span</param>
 		/// <param name="actualSpan">The span to be inspected</param>
 		/// <exception cref="DoesNotContainException">Thrown when the sub-span is present inside the span</exception>
-		public static void DoesNotContain<T>(
+		public static void DoesNotContain<[DynamicallyAccessedMembers(
+					DynamicallyAccessedMemberTypes.PublicFields
+					| DynamicallyAccessedMemberTypes.NonPublicFields
+					| DynamicallyAccessedMemberTypes.PublicProperties
+					| DynamicallyAccessedMemberTypes.NonPublicProperties
+					| DynamicallyAccessedMemberTypes.PublicMethods)] T>(
 			ReadOnlySpan<T> expectedSubSpan,
 			Span<T> actualSpan)
 				where T : IEquatable<T> =>
@@ -318,112 +358,30 @@ namespace Xunit
 		/// <param name="expectedSubSpan">The sub-span expected not to be in the span</param>
 		/// <param name="actualSpan">The span to be inspected</param>
 		/// <exception cref="DoesNotContainException">Thrown when the sub-span is present inside the span</exception>
-		public static void DoesNotContain<T>(
+		public static void DoesNotContain<[DynamicallyAccessedMembers(
+					DynamicallyAccessedMemberTypes.PublicFields
+					| DynamicallyAccessedMemberTypes.NonPublicFields
+					| DynamicallyAccessedMemberTypes.PublicProperties
+					| DynamicallyAccessedMemberTypes.NonPublicProperties
+					| DynamicallyAccessedMemberTypes.PublicMethods)] T>(
 			ReadOnlySpan<T> expectedSubSpan,
 			ReadOnlySpan<T> actualSpan)
 				where T : IEquatable<T>
 		{
-			if (actualSpan.IndexOf(expectedSubSpan) > -1)
-				throw new DoesNotContainException(expectedSubSpan.ToArray(), actualSpan.ToArray());
-		}
+			var idx = actualSpan.IndexOf(expectedSubSpan);
+			if (idx > -1)
+			{
+				int? failurePointerIndent;
+				var formattedExpected = CollectionTracker<T>.FormatStart(expectedSubSpan);
+				var formattedActual = CollectionTracker<T>.FormatIndexedMismatch(actualSpan, idx, out failurePointerIndent);
 
-		/// <summary>
-		/// Verifies that a span starts with a given sub-span, using the default StringComparison.CurrentCulture comparison type.
-		/// </summary>
-		/// <param name="expectedStartSpan">The sub-span expected to be at the start of the span</param>
-		/// <param name="actualSpan">The span to be inspected</param>
-		/// <exception cref="StartsWithException">Thrown when the span does not start with the expected subspan</exception>
-		public static void StartsWith(
-			Span<char> expectedStartSpan,
-			Span<char> actualSpan) =>
-				StartsWith((ReadOnlySpan<char>)expectedStartSpan, (ReadOnlySpan<char>)actualSpan, StringComparison.CurrentCulture);
-
-		/// <summary>
-		/// Verifies that a span starts with a given sub-span, using the default StringComparison.CurrentCulture comparison type.
-		/// </summary>
-		/// <param name="expectedStartSpan">The sub-span expected to be at the start of the span</param>
-		/// <param name="actualSpan">The span to be inspected</param>
-		/// <exception cref="StartsWithException">Thrown when the span does not start with the expected subspan</exception>
-		public static void StartsWith(
-			Span<char> expectedStartSpan,
-			ReadOnlySpan<char> actualSpan) =>
-				StartsWith((ReadOnlySpan<char>)expectedStartSpan, actualSpan, StringComparison.CurrentCulture);
-
-		/// <summary>
-		/// Verifies that a span starts with a given sub-span, using the default StringComparison.CurrentCulture comparison type.
-		/// </summary>
-		/// <param name="expectedStartSpan">The sub-span expected to be at the start of the span</param>
-		/// <param name="actualSpan">The span to be inspected</param>
-		/// <exception cref="StartsWithException">Thrown when the span does not start with the expected subspan</exception>
-		public static void StartsWith(
-			ReadOnlySpan<char> expectedStartSpan,
-			Span<char> actualSpan) =>
-				StartsWith(expectedStartSpan, (ReadOnlySpan<char>)actualSpan, StringComparison.CurrentCulture);
-
-		/// <summary>
-		/// Verifies that a span starts with a given sub-span, using the default StringComparison.CurrentCulture comparison type.
-		/// </summary>
-		/// <param name="expectedStartSpan">The sub-span expected to be at the start of the span</param>
-		/// <param name="actualSpan">The span to be inspected</param>
-		/// <exception cref="StartsWithException">Thrown when the span does not start with the expected subspan</exception>
-		public static void StartsWith(
-			ReadOnlySpan<char> expectedStartSpan,
-			ReadOnlySpan<char> actualSpan) =>
-				StartsWith(expectedStartSpan, actualSpan, StringComparison.CurrentCulture);
-
-		/// <summary>
-		/// Verifies that a span starts with a given sub-span, using the given comparison type.
-		/// </summary>
-		/// <param name="expectedStartSpan">The sub-span expected to be at the start of the span</param>
-		/// <param name="actualSpan">The span to be inspected</param>
-		/// <param name="comparisonType">The type of string comparison to perform</param>
-		/// <exception cref="StartsWithException">Thrown when the span does not start with the expected subspan</exception>
-		public static void StartsWith(
-			Span<char> expectedStartSpan,
-			Span<char> actualSpan,
-			StringComparison comparisonType = StringComparison.CurrentCulture) =>
-				StartsWith((ReadOnlySpan<char>)expectedStartSpan, (ReadOnlySpan<char>)actualSpan, comparisonType);
-
-		/// <summary>
-		/// Verifies that a span starts with a given sub-span, using the given comparison type.
-		/// </summary>
-		/// <param name="expectedStartSpan">The sub-span expected to be at the start of the span</param>
-		/// <param name="actualSpan">The span to be inspected</param>
-		/// <param name="comparisonType">The type of string comparison to perform</param>
-		/// <exception cref="StartsWithException">Thrown when the span does not start with the expected subspan</exception>
-		public static void StartsWith(
-			Span<char> expectedStartSpan,
-			ReadOnlySpan<char> actualSpan,
-			StringComparison comparisonType = StringComparison.CurrentCulture) =>
-				StartsWith((ReadOnlySpan<char>)expectedStartSpan, actualSpan, comparisonType);
-
-		/// <summary>
-		/// Verifies that a span starts with a given sub-span, using the given comparison type.
-		/// </summary>
-		/// <param name="expectedStartSpan">The sub-span expected to be at the start of the span</param>
-		/// <param name="actualSpan">The span to be inspected</param>
-		/// <param name="comparisonType">The type of string comparison to perform</param>
-		/// <exception cref="StartsWithException">Thrown when the span does not start with the expected subspan</exception>
-		public static void StartsWith(
-			ReadOnlySpan<char> expectedStartSpan,
-			Span<char> actualSpan,
-			StringComparison comparisonType = StringComparison.CurrentCulture) =>
-				StartsWith(expectedStartSpan, (ReadOnlySpan<char>)actualSpan, comparisonType);
-
-		/// <summary>
-		/// Verifies that a span starts with a given sub-span, using the given comparison type.
-		/// </summary>
-		/// <param name="expectedStartSpan">The sub-span expected to be at the start of the span</param>
-		/// <param name="actualSpan">The span to be inspected</param>
-		/// <param name="comparisonType">The type of string comparison to perform</param>
-		/// <exception cref="StartsWithException">Thrown when the span does not start with the expected subspan</exception>
-		public static void StartsWith(
-			ReadOnlySpan<char> expectedStartSpan,
-			ReadOnlySpan<char> actualSpan,
-			StringComparison comparisonType = StringComparison.CurrentCulture)
-		{
-			if (!actualSpan.StartsWith(expectedStartSpan, comparisonType))
-				throw new StartsWithException(expectedStartSpan.ToString(), actualSpan.ToString());
+				throw DoesNotContainException.ForSubSpanFound(
+					formattedExpected,
+					idx,
+					failurePointerIndent,
+					formattedActual
+				);
+			}
 		}
 
 		/// <summary>
@@ -522,7 +480,7 @@ namespace Xunit
 			StringComparison comparisonType = StringComparison.CurrentCulture)
 		{
 			if (!actualSpan.EndsWith(expectedEndSpan, comparisonType))
-				throw new EndsWithException(expectedEndSpan.ToString(), actualSpan.ToString());
+				throw EndsWithException.ForStringNotFound(expectedEndSpan.ToString(), actualSpan.ToString());
 		}
 
 		/// <summary>
@@ -697,7 +655,7 @@ namespace Xunit
 			}
 
 			if (expectedIndex < expectedLength || actualIndex < actualLength)
-				throw new EqualException(expectedSpan.ToString(), actualSpan.ToString(), expectedIndex, actualIndex);
+				throw EqualException.ForMismatchedStrings(expectedSpan.ToString(), actualSpan.ToString(), expectedIndex, actualIndex);
 		}
 
 		/// <summary>
@@ -749,6 +707,105 @@ namespace Xunit
 		{
 			if (!expectedSpan.SequenceEqual(actualSpan))
 				Equal<object>(expectedSpan.ToArray(), actualSpan.ToArray());
+		}
+
+		/// <summary>
+		/// Verifies that a span starts with a given sub-span, using the default StringComparison.CurrentCulture comparison type.
+		/// </summary>
+		/// <param name="expectedStartSpan">The sub-span expected to be at the start of the span</param>
+		/// <param name="actualSpan">The span to be inspected</param>
+		/// <exception cref="StartsWithException">Thrown when the span does not start with the expected subspan</exception>
+		public static void StartsWith(
+			Span<char> expectedStartSpan,
+			Span<char> actualSpan) =>
+				StartsWith((ReadOnlySpan<char>)expectedStartSpan, (ReadOnlySpan<char>)actualSpan, StringComparison.CurrentCulture);
+
+		/// <summary>
+		/// Verifies that a span starts with a given sub-span, using the default StringComparison.CurrentCulture comparison type.
+		/// </summary>
+		/// <param name="expectedStartSpan">The sub-span expected to be at the start of the span</param>
+		/// <param name="actualSpan">The span to be inspected</param>
+		/// <exception cref="StartsWithException">Thrown when the span does not start with the expected subspan</exception>
+		public static void StartsWith(
+			Span<char> expectedStartSpan,
+			ReadOnlySpan<char> actualSpan) =>
+				StartsWith((ReadOnlySpan<char>)expectedStartSpan, actualSpan, StringComparison.CurrentCulture);
+
+		/// <summary>
+		/// Verifies that a span starts with a given sub-span, using the default StringComparison.CurrentCulture comparison type.
+		/// </summary>
+		/// <param name="expectedStartSpan">The sub-span expected to be at the start of the span</param>
+		/// <param name="actualSpan">The span to be inspected</param>
+		/// <exception cref="StartsWithException">Thrown when the span does not start with the expected subspan</exception>
+		public static void StartsWith(
+			ReadOnlySpan<char> expectedStartSpan,
+			Span<char> actualSpan) =>
+				StartsWith(expectedStartSpan, (ReadOnlySpan<char>)actualSpan, StringComparison.CurrentCulture);
+
+		/// <summary>
+		/// Verifies that a span starts with a given sub-span, using the default StringComparison.CurrentCulture comparison type.
+		/// </summary>
+		/// <param name="expectedStartSpan">The sub-span expected to be at the start of the span</param>
+		/// <param name="actualSpan">The span to be inspected</param>
+		/// <exception cref="StartsWithException">Thrown when the span does not start with the expected subspan</exception>
+		public static void StartsWith(
+			ReadOnlySpan<char> expectedStartSpan,
+			ReadOnlySpan<char> actualSpan) =>
+				StartsWith(expectedStartSpan, actualSpan, StringComparison.CurrentCulture);
+
+		/// <summary>
+		/// Verifies that a span starts with a given sub-span, using the given comparison type.
+		/// </summary>
+		/// <param name="expectedStartSpan">The sub-span expected to be at the start of the span</param>
+		/// <param name="actualSpan">The span to be inspected</param>
+		/// <param name="comparisonType">The type of string comparison to perform</param>
+		/// <exception cref="StartsWithException">Thrown when the span does not start with the expected subspan</exception>
+		public static void StartsWith(
+			Span<char> expectedStartSpan,
+			Span<char> actualSpan,
+			StringComparison comparisonType = StringComparison.CurrentCulture) =>
+				StartsWith((ReadOnlySpan<char>)expectedStartSpan, (ReadOnlySpan<char>)actualSpan, comparisonType);
+
+		/// <summary>
+		/// Verifies that a span starts with a given sub-span, using the given comparison type.
+		/// </summary>
+		/// <param name="expectedStartSpan">The sub-span expected to be at the start of the span</param>
+		/// <param name="actualSpan">The span to be inspected</param>
+		/// <param name="comparisonType">The type of string comparison to perform</param>
+		/// <exception cref="StartsWithException">Thrown when the span does not start with the expected subspan</exception>
+		public static void StartsWith(
+			Span<char> expectedStartSpan,
+			ReadOnlySpan<char> actualSpan,
+			StringComparison comparisonType = StringComparison.CurrentCulture) =>
+				StartsWith((ReadOnlySpan<char>)expectedStartSpan, actualSpan, comparisonType);
+
+		/// <summary>
+		/// Verifies that a span starts with a given sub-span, using the given comparison type.
+		/// </summary>
+		/// <param name="expectedStartSpan">The sub-span expected to be at the start of the span</param>
+		/// <param name="actualSpan">The span to be inspected</param>
+		/// <param name="comparisonType">The type of string comparison to perform</param>
+		/// <exception cref="StartsWithException">Thrown when the span does not start with the expected subspan</exception>
+		public static void StartsWith(
+			ReadOnlySpan<char> expectedStartSpan,
+			Span<char> actualSpan,
+			StringComparison comparisonType = StringComparison.CurrentCulture) =>
+				StartsWith(expectedStartSpan, (ReadOnlySpan<char>)actualSpan, comparisonType);
+
+		/// <summary>
+		/// Verifies that a span starts with a given sub-span, using the given comparison type.
+		/// </summary>
+		/// <param name="expectedStartSpan">The sub-span expected to be at the start of the span</param>
+		/// <param name="actualSpan">The span to be inspected</param>
+		/// <param name="comparisonType">The type of string comparison to perform</param>
+		/// <exception cref="StartsWithException">Thrown when the span does not start with the expected subspan</exception>
+		public static void StartsWith(
+			ReadOnlySpan<char> expectedStartSpan,
+			ReadOnlySpan<char> actualSpan,
+			StringComparison comparisonType = StringComparison.CurrentCulture)
+		{
+			if (!actualSpan.StartsWith(expectedStartSpan, comparisonType))
+				throw StartsWithException.ForStringNotFound(expectedStartSpan.ToString(), actualSpan.ToString());
 		}
 
 		// ReadOnlySpan<char> helper methods

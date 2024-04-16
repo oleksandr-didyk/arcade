@@ -35,7 +35,8 @@ namespace Xunit
 
 			var propertyChangeHappened = false;
 
-			PropertyChangedEventHandler handler = (sender, args) => propertyChangeHappened |= string.IsNullOrEmpty(args.PropertyName) || propertyName.Equals(args.PropertyName, StringComparison.OrdinalIgnoreCase);
+			PropertyChangedEventHandler handler = (sender, args) =>
+				propertyChangeHappened = propertyChangeHappened || string.IsNullOrEmpty(args.PropertyName) || propertyName.Equals(args.PropertyName, StringComparison.OrdinalIgnoreCase);
 
 			@object.PropertyChanged += handler;
 
@@ -43,7 +44,7 @@ namespace Xunit
 			{
 				testCode();
 				if (!propertyChangeHappened)
-					throw new PropertyChangedException(propertyName);
+					throw PropertyChangedException.ForUnsetProperty(propertyName);
 			}
 			finally
 			{
@@ -59,7 +60,7 @@ namespace Xunit
 			string propertyName,
 			Func<Task> testCode)
 		{
-			throw new NotImplementedException();
+			throw new NotImplementedException("You must call Assert.PropertyChangedAsync (and await the result) when testing async code.");
 		}
 
 		/// <summary>
@@ -81,7 +82,8 @@ namespace Xunit
 
 			var propertyChangeHappened = false;
 
-			PropertyChangedEventHandler handler = (sender, args) => propertyChangeHappened |= string.IsNullOrEmpty(args.PropertyName) || propertyName.Equals(args.PropertyName, StringComparison.OrdinalIgnoreCase);
+			PropertyChangedEventHandler handler = (sender, args) =>
+				propertyChangeHappened = propertyChangeHappened || string.IsNullOrEmpty(args.PropertyName) || propertyName.Equals(args.PropertyName, StringComparison.OrdinalIgnoreCase);
 
 			@object.PropertyChanged += handler;
 
@@ -89,7 +91,7 @@ namespace Xunit
 			{
 				await testCode();
 				if (!propertyChangeHappened)
-					throw new PropertyChangedException(propertyName);
+					throw PropertyChangedException.ForUnsetProperty(propertyName);
 			}
 			finally
 			{

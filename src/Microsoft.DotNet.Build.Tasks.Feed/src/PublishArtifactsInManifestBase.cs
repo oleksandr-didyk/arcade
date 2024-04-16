@@ -5,6 +5,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
@@ -12,7 +13,6 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Net.Sockets;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -27,10 +27,9 @@ using Microsoft.DotNet.Maestro.Client.Models;
 #endif
 using Microsoft.DotNet.VersionTools.BuildManifest.Model;
 using Newtonsoft.Json;
-using NuGet.Packaging;
-using NuGet.Packaging.Core;
 using NuGet.Versioning;
 using static Microsoft.DotNet.Build.Tasks.Feed.GeneralUtils;
+using static Microsoft.DotNet.Build.CloudTestTasks.AzureStorageUtils;
 using MsBuildUtils = Microsoft.Build.Utilities;
 
 namespace Microsoft.DotNet.Build.Tasks.Feed
@@ -227,13 +226,17 @@ namespace Microsoft.DotNet.Build.Tasks.Feed
         /// <param name="name">Name of asset</param>
         /// <param name="version">Version of asset</param>
         /// <returns>Asset if one with the name and version exists, null otherwise</returns>
-        private Asset LookupAsset(string name, string version, Dictionary<string, HashSet<Asset>> buildAssets)
+        private Asset LookupAsset(string name, string version, ReadOnlyDictionary<string, Asset> buildAssets)
         {
-            if (!buildAssets.TryGetValue(name, out HashSet<Asset> assetsWithName))
+            if (!buildAssets.TryGetValue(name, out Asset assetWithName))
             {
                 return null;
             }
-            return assetsWithName.FirstOrDefault(asset => asset.Version == version);
+            if (assetWithName.Version == version)
+            {
+                return assetWithName;
+            }
+            return null;
         }
 
         /// <summary>
@@ -245,13 +248,13 @@ namespace Microsoft.DotNet.Build.Tasks.Feed
         ///     Asset if one with the name exists and is the only asset with the name.
         ///     Throws if there is more than one asset with that name.
         /// </returns>
-        private Asset LookupAsset(string name, Dictionary<string, HashSet<Asset>> buildAssets)
+        private Asset LookupAsset(string name, ReadOnlyDictionary<string, Asset> buildAssets)
         {
-            if (!buildAssets.TryGetValue(name, out HashSet<Asset> assetsWithName))
+            if (!buildAssets.TryGetValue(name, out Asset assetWithName))
             {
                 return null;
             }
-            return assetsWithName.Single();
+            return assetWithName;
         }
 
         /// <summary>
@@ -261,23 +264,23 @@ namespace Microsoft.DotNet.Build.Tasks.Feed
         /// </summary>
         /// <param name="buildInformation">Build information</param>
         /// <returns>Map of asset name -> list of assets with that name.</returns>
-        protected Dictionary<string, HashSet<Asset>> CreateBuildAssetDictionary(Maestro.Client.Models.Build buildInformation)
+        protected ReadOnlyDictionary<string, Asset> CreateBuildAssetDictionary(Maestro.Client.Models.Build buildInformation)
         {
-            Dictionary<string, HashSet<Asset>> buildAssets = new Dictionary<string, HashSet<Asset>>();
+            Dictionary<string, Asset> buildAssets = new Dictionary<string, Asset>();
 
             foreach (var asset in buildInformation.Assets)
             {
-                if (buildAssets.TryGetValue(asset.Name, out HashSet<Asset> assetsWithName))
+                if (buildAssets.ContainsKey(asset.Name))
                 {
-                    assetsWithName.Add(asset);
+                    Log.LogError($"Asset '{asset.Name}' is specified twice in the build information. Assets should not be duplicated.");
                 }
                 else
                 {
-                    buildAssets.Add(asset.Name, new HashSet<Asset>(new AssetComparer()) { asset });
+                    buildAssets.Add(asset.Name, asset);
                 }
             }
 
-            return buildAssets;
+            return buildAssets.AsReadOnly();
         }
 
         /// <summary>
@@ -289,7 +292,7 @@ namespace Microsoft.DotNet.Build.Tasks.Feed
         /// <param name="feedConfig">Configuration of where the asset was published.</param>
         /// <param name="assetLocationType">Type of feed location that is being added.</param>
         /// <returns>True if that asset didn't have the informed location recorded already.</returns>
-        private bool TryAddAssetLocation(string assetId, string assetVersion, Dictionary<string, HashSet<Asset>> buildAssets, TargetFeedConfig feedConfig, LocationType assetLocationType)
+        private bool TryAddAssetLocation(string assetId, string assetVersion, ReadOnlyDictionary<string, Asset> buildAssets, TargetFeedConfig feedConfig, LocationType assetLocationType)
         {
             Asset assetRecord = string.IsNullOrEmpty(assetVersion) ?
                 LookupAsset(assetId, buildAssets) :
@@ -411,7 +414,7 @@ namespace Microsoft.DotNet.Build.Tasks.Feed
             string symWebToken,
             string symbolPublishingExclusionsFile,
             bool publishSpecialClrFiles,
-            Dictionary<string, HashSet<Asset>> buildAssets,
+            ReadOnlyDictionary<string, Asset> buildAssets,
             SemaphoreSlim clientThrottle)
         {
             bool failed = false;
@@ -623,7 +626,7 @@ namespace Microsoft.DotNet.Build.Tasks.Feed
             string symWebToken,
             string symbolPublishingExclusionsFile,
             bool publishSpecialClrFiles,
-            Dictionary<string, HashSet<Asset>> buildAssets,
+            ReadOnlyDictionary<string, Asset> buildAssets,
             SemaphoreSlim clientThrottle = null,
             string temporarySymbolsLocation = null)
         {
@@ -763,7 +766,7 @@ namespace Microsoft.DotNet.Build.Tasks.Feed
         /// <param name="buildAssets">Assets information about build being published.</param>
         /// <param name="clientThrottle">To avoid starting too many processes</param>
         /// <returns>Task</returns>
-        protected async Task HandlePackagePublishingAsync(Dictionary<string, HashSet<Asset>> buildAssets, SemaphoreSlim clientThrottle = null)
+        protected async Task HandlePackagePublishingAsync(ReadOnlyDictionary<string, Asset> buildAssets, SemaphoreSlim clientThrottle = null)
         {
             List<Task> publishTasks = new List<Task>();
 
@@ -998,7 +1001,7 @@ namespace Microsoft.DotNet.Build.Tasks.Feed
             }
         }
 
-        protected async Task HandleBlobPublishingAsync(Dictionary<string, HashSet<Asset>> buildAssets, SemaphoreSlim clientThrottle = null)
+        protected async Task HandleBlobPublishingAsync(ReadOnlyDictionary<string, Asset> buildAssets, SemaphoreSlim clientThrottle = null)
         {
             List<Task> publishTasks = new List<Task>();
 
@@ -1137,7 +1140,7 @@ namespace Microsoft.DotNet.Build.Tasks.Feed
 
         private async Task PublishPackagesFromPackageArtifactsToAzDoNugetFeedAsync(
             HashSet<PackageArtifactModel> packagesToPublish,
-            Dictionary<string, HashSet<Asset>> buildAssets,
+            ReadOnlyDictionary<string, Asset> buildAssets,
             TargetFeedConfig feedConfig)
         {
             await PushNugetPackagesAsync(packagesToPublish, feedConfig, maxClients: MaxClients,
@@ -1172,7 +1175,7 @@ namespace Microsoft.DotNet.Build.Tasks.Feed
 
         private async Task PublishPackagesUsingStreamingToAzdoNugetAsync(
             HashSet<PackageArtifactModel> packagesToPublish,
-            Dictionary<string, HashSet<Asset>> buildAssets,
+            ReadOnlyDictionary<string, Asset> buildAssets,
             TargetFeedConfig feedConfig,
             SemaphoreSlim clientThrottle)
         {
@@ -1256,7 +1259,7 @@ namespace Microsoft.DotNet.Build.Tasks.Feed
 
         private async Task PublishPackagesToAzDoNugetFeedAsync(
             HashSet<PackageArtifactModel> packagesToPublish,
-            Dictionary<string, HashSet<Asset>> buildAssets,
+            ReadOnlyDictionary<string, Asset> buildAssets,
             TargetFeedConfig feedConfig,
             SemaphoreSlim clientThrottle)
         {
@@ -1374,10 +1377,10 @@ namespace Microsoft.DotNet.Build.Tasks.Feed
             )
         {
             // Using these callbacks we can mock up functionality when testing.
-            CompareLocalPackageToFeedPackageCallBack ??= GeneralUtils.CompareLocalPackageToFeedPackage;
+            CompareLocalPackageToFeedPackageCallBack ??= CompareLocalPackageToFeedPackage;
             RunProcessAndGetOutputsCallBack ??= GeneralUtils.RunProcessAndGetOutputsAsync;
             ProcessExecutionResult nugetResult = null;
-            var packageStatus = GeneralUtils.PackageFeedStatus.Unknown;
+            var packageStatus = PackageFeedStatus.Unknown;
 
             try
             {
@@ -1393,7 +1396,7 @@ namespace Microsoft.DotNet.Build.Tasks.Feed
                     if (nugetResult.ExitCode == 0)
                     {
                         // We have just pushed this package so we know it exists and is identical to our local copy
-                        packageStatus = GeneralUtils.PackageFeedStatus.ExistsAndIdenticalToLocal;
+                        packageStatus = PackageFeedStatus.ExistsAndIdenticalToLocal;
                         break;
                     }
 
@@ -1404,12 +1407,12 @@ namespace Microsoft.DotNet.Build.Tasks.Feed
 
                     switch (packageStatus)
                     {
-                        case GeneralUtils.PackageFeedStatus.ExistsAndIdenticalToLocal:
+                        case PackageFeedStatus.ExistsAndIdenticalToLocal:
                             {
                                 Log.LogMessage(MessageImportance.Normal, $"Package '{localPackageLocation}' already exists on '{feedConfig.TargetURL}' but has the same content; skipping push");
                                 break;
                             }
-                        case GeneralUtils.PackageFeedStatus.ExistsAndDifferent:
+                        case PackageFeedStatus.ExistsAndDifferent:
                             {
                                 Log.LogError($"Package '{localPackageLocation}' already exists on '{feedConfig.TargetURL}' with different content.");
                                 break;
@@ -1423,11 +1426,11 @@ namespace Microsoft.DotNet.Build.Tasks.Feed
                             }
                     }
                 }
-                while (packageStatus != GeneralUtils.PackageFeedStatus.ExistsAndIdenticalToLocal && // Success
-                       packageStatus != GeneralUtils.PackageFeedStatus.ExistsAndDifferent &&        // Give up: Non-retriable error
+                while (packageStatus != PackageFeedStatus.ExistsAndIdenticalToLocal && // Success
+                       packageStatus != PackageFeedStatus.ExistsAndDifferent &&        // Give up: Non-retriable error
                        attemptIndex <= MaxRetryCount);                                              // Give up: Too many retries
 
-                if (packageStatus != GeneralUtils.PackageFeedStatus.ExistsAndIdenticalToLocal)
+                if (packageStatus != PackageFeedStatus.ExistsAndIdenticalToLocal)
                 {
                     Log.LogError($"Failed to publish package '{id}@{version}' to '{feedConfig.TargetURL}' after {MaxRetryCount} attempts. (Final status: {packageStatus})");
                 }
@@ -1441,213 +1444,9 @@ namespace Microsoft.DotNet.Build.Tasks.Feed
                 Log.LogError($"Unexpected exception pushing package '{id}@{version}': {e.Message}");
             }
 
-            if (packageStatus != GeneralUtils.PackageFeedStatus.ExistsAndIdenticalToLocal && nugetResult?.ExitCode != 0)
+            if (packageStatus != PackageFeedStatus.ExistsAndIdenticalToLocal && nugetResult?.ExitCode != 0)
             {
                 Log.LogError($"Output from nuget.exe: {Environment.NewLine}StdOut:{Environment.NewLine}{nugetResult.StandardOut}{Environment.NewLine}StdErr:{Environment.NewLine}{nugetResult.StandardError}");
-            }
-        }
-
-        private async Task PublishBlobsToAzDoNugetFeedAsync(
-            HashSet<BlobArtifactModel> blobsToPublish,
-            Dictionary<string, HashSet<Asset>> buildAssets,
-            TargetFeedConfig feedConfig,
-            SemaphoreSlim clientThrottle)
-        {
-            HashSet<BlobArtifactModel> packagesToPublish = new HashSet<BlobArtifactModel>();
-
-            foreach (var blob in blobsToPublish)
-            {
-                // Applies to symbol packages and core-sdk's VS feed packages
-                if (blob.Id.EndsWith(GeneralUtils.PackageSuffix, StringComparison.OrdinalIgnoreCase))
-                {
-                    packagesToPublish.Add(blob);
-                }
-                else
-                {
-                    Log.LogWarning(
-                        $"AzDO feed publishing not available for blobs. Blob '{blob.Id}' was not published.");
-                }
-            }
-
-            if (UseStreamingPublishing)
-            {
-                await PublishBlobsUsingStreamingToAzDoNugetAsync(packagesToPublish, buildAssets, feedConfig, clientThrottle);
-            }
-            else
-            {
-                await PublishBlobsFromBlobArtifactsToAzDoNugetAsync(packagesToPublish, buildAssets, feedConfig);
-            }
-        }
-
-        private async Task PublishBlobsFromBlobArtifactsToAzDoNugetAsync(
-            HashSet<BlobArtifactModel> blobsToPublish,
-            Dictionary<string, HashSet<Asset>> buildAssets,
-            TargetFeedConfig feedConfig)
-        {
-            await PushNugetPackagesAsync<BlobArtifactModel>(
-                blobsToPublish,
-                feedConfig,
-                maxClients: MaxClients,
-                async (feed, httpClient, blob, feedAccount, feedVisibility, feedName) =>
-                {
-                    if (TryAddAssetLocation(
-                        blob.Id,
-                        assetVersion: null,
-                        buildAssets,
-                        feedConfig,
-                        LocationType.Container))
-                    {
-                        // Determine the local path to the blob
-                        string fileName = Path.GetFileName(blob.Id);
-                        string localBlobPath = Path.Combine(BlobAssetsBasePath, fileName);
-                        if (!File.Exists(localBlobPath))
-                        {
-                            Log.LogError($"Could not locate '{blob.Id} at '{localBlobPath}'");
-                            return;
-                        }
-
-                        string id;
-                        string version;
-                        // Determine package ID and version by asking the nuget libraries
-                        using (var packageReader = new PackageArchiveReader(localBlobPath))
-                        {
-                            PackageIdentity packageIdentity = packageReader.GetIdentity();
-                            id = packageIdentity.Id;
-                            version = packageIdentity.Version.ToString();
-                        }
-
-                        await PushNugetPackageAsync(
-                            feed,
-                            httpClient,
-                            localBlobPath,
-                            id,
-                            version,
-                            feedAccount,
-                            feedVisibility,
-                            feedName);
-                    }
-                });
-        }
-
-        private async Task PublishBlobsUsingStreamingToAzDoNugetAsync(
-            HashSet<BlobArtifactModel> blobsToPublish,
-            Dictionary<string, HashSet<Asset>> buildAssets,
-            TargetFeedConfig feedConfig,
-            SemaphoreSlim clientThrottle)
-        {
-            bool failed = false;
-            using HttpClient httpClient = CreateAzdoClient(AzureDevOpsOrg, false, AzureProject);
-            string containerId = await GetContainerIdAsync(httpClient, ArtifactName.BlobArtifacts);
-
-            using HttpClient client = CreateAzdoClient(AzureDevOpsOrg, true, AzureProject);
-
-            await Task.WhenAll(blobsToPublish.Select(async blob =>
-            {
-                try
-                {
-                    await clientThrottle.WaitAsync();
-                    if (TryAddAssetLocation(
-                        blob.Id,
-                        assetVersion: null,
-                        buildAssets,
-                        feedConfig,
-                        LocationType.Container))
-                    {
-                        string temporaryBlobDirectory = CreateTemporaryDirectory();
-                        string fileName = Path.GetFileName(blob.Id);
-                        string localBlobPath = Path.Combine(temporaryBlobDirectory, fileName);
-                        Log.LogMessage(MessageImportance.Low, $"Downloading blob : {fileName} to {localBlobPath}");
-
-                        Stopwatch gatherBlobDownloadTime = Stopwatch.StartNew();
-                        await DownloadFileAsync(
-                            client,
-                            ArtifactName.BlobArtifacts,
-                            containerId,
-                            fileName,
-                            localBlobPath);
-
-                        if (!File.Exists(localBlobPath))
-                        {
-                            failed = true;
-                            Log.LogError($"Could not locate '{blob.Id} at '{localBlobPath}'");
-                        }
-                        gatherBlobDownloadTime.Stop();
-
-                        if (failed)
-                        {
-                            return;
-                        }
-
-                        Log.LogMessage(MessageImportance.Low, $"Time taken to download file to '{localBlobPath}' is {gatherBlobDownloadTime.ElapsedMilliseconds / 1000.0} (seconds)");
-
-                        Log.LogMessage(MessageImportance.Low,
-                            $"Successfully downloaded blob : {fileName} to {localBlobPath}");
-
-                        string id;
-                        string version;
-                        using (var packageReader = new PackageArchiveReader(localBlobPath))
-                        {
-                            PackageIdentity packageIdentity = packageReader.GetIdentity();
-                            id = packageIdentity.Id;
-                            version = packageIdentity.Version.ToString();
-                        }
-
-                        Stopwatch gatherBlobPublishingTime = Stopwatch.StartNew();
-                        await PushBlobToNugetFeed(
-                            feedConfig,
-                            localBlobPath,
-                            id,
-                            version);
-                        gatherBlobPublishingTime.Stop();
-                        Log.LogMessage(MessageImportance.Low, $"Time taken to publish blob {localBlobPath} is {gatherBlobPublishingTime.ElapsedMilliseconds / 1000.0} (seconds)");
-
-                        DeleteTemporaryDirectory(temporaryBlobDirectory);
-                    }
-                }
-                finally
-                {
-                    clientThrottle.Release();
-                }
-            }));
-        }
-
-        private async Task PushBlobToNugetFeed(TargetFeedConfig feedConfig, string localBlobPath, string id,
-            string version)
-        {
-            var parsedUri = Regex.Match(feedConfig.TargetURL, PublishingConstants.AzDoNuGetFeedPattern);
-            if (!parsedUri.Success)
-            {
-                Log.LogError(
-                    $"Azure DevOps NuGetFeed was not in the expected format '{PublishingConstants.AzDoNuGetFeedPattern}'");
-                return;
-            }
-            string feedAccount = parsedUri.Groups["account"].Value;
-            string feedVisibility = parsedUri.Groups["visibility"].Value;
-            string feedName = parsedUri.Groups["feed"].Value;
-
-            using HttpClient httpClient = new HttpClient(new HttpClientHandler
-            { CheckCertificateRevocationList = true });
-            httpClient.Timeout = TimeSpan.FromSeconds(TimeoutInSeconds);
-            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-                "Basic",
-                Convert.ToBase64String(
-                    Encoding.ASCII.GetBytes(string.Format("{0}:{1}", "",
-                        feedConfig.Token))));
-            try
-            {
-                await PushNugetPackageAsync(
-                    feedConfig,
-                    httpClient,
-                    localBlobPath,
-                    id,
-                    version,
-                    feedAccount,
-                    feedVisibility,
-                    feedName);
-            }
-            catch (Exception e)
-            {
-                Log.LogErrorFromException(e);
             }
         }
 
@@ -1664,7 +1463,7 @@ namespace Microsoft.DotNet.Build.Tasks.Feed
         }
 
         private async Task PublishAssetsAsync(IAssetPublisher assetPublisher, HashSet<string> assetsToPublish,
-            Dictionary<string, HashSet<Asset>> buildAssets,
+            ReadOnlyDictionary<string, Asset> buildAssets,
             TargetFeedConfig feedConfig,
             SemaphoreSlim clientThrottle)
         {
@@ -1706,7 +1505,7 @@ namespace Microsoft.DotNet.Build.Tasks.Feed
         private async Task PublishAssetsUsingStreamingPublishingAsync(
             IAssetPublisher assetPublisher,
             HashSet<string> assetsToPublish,
-            Dictionary<string, HashSet<Asset>> buildAssets,
+            ReadOnlyDictionary<string, Asset> buildAssets,
             TargetFeedConfig feedConfig,
             SemaphoreSlim clientThrottle)
         {
@@ -1776,7 +1575,7 @@ namespace Microsoft.DotNet.Build.Tasks.Feed
         private async Task PublishAssetsWithoutStreamingPublishingAsync(
             IAssetPublisher assetPublisher,
             HashSet<string> assetsToPublish,
-            Dictionary<string, HashSet<Asset>> buildAssets,
+            ReadOnlyDictionary<string, Asset> buildAssets,
             TargetFeedConfig feedConfig)
         {
             bool failed = false;

@@ -50,22 +50,16 @@
     <UsingToolXUnit Condition="'$(UsingToolXUnit)' == ''">true</UsingToolXUnit>
 
     <!--
-      Use compilers from the Microsoft.Net.Compilers/Microsoft.NETCore.Compilers package.
+      Use compilers from the Microsoft.Net.Compilers.Toolset package.
       Repo can set this property to true if it needs to use a different version of the compiler than the one in the dotnet SDK.
     -->
     <UsingToolMicrosoftNetCompilers Condition="'$(UsingToolMicrosoftNetCompilers)' == ''">false</UsingToolMicrosoftNetCompilers>
-
-    <!--
-      Use IL linker from the Microsoft.NET.ILLink.Tasks package.
-      Repo can set this property to true if it needs to use a different version of the IL linker than the one in the dotnet SDK.
-    -->
-    <UsingToolMicrosoftNetILLinkTasks Condition="'$(UsingToolMicrosoftNetILLinkTasks)' == ''">false</UsingToolMicrosoftNetILLinkTasks>
   </PropertyGroup>
 
   <!--
     Disable features when building from source.
   -->
-  <PropertyGroup Condition="'$(ArcadeBuildFromSource)' == 'true'">
+  <PropertyGroup Condition="'$(ArcadeBuildFromSource)' == 'true' or '$(DotNetBuildSourceOnly)' == 'true'">
     <UsingToolPdbConverter>false</UsingToolPdbConverter>
     <UsingToolVSSDK>false</UsingToolVSSDK>
     <UsingToolIbcOptimization>false</UsingToolIbcOptimization>
@@ -85,12 +79,15 @@
     <MicrosoftVSSDKBuildToolsVersion Condition="'$(MicrosoftVSSDKBuildToolsVersion)' == ''">16.9.1050</MicrosoftVSSDKBuildToolsVersion>
     <MicrosoftDotnetNuGetRepackTasksVersion Condition="'$(MicrosoftDotnetNuGetRepackTasksVersion)' == ''">$(ArcadeSdkVersion)</MicrosoftDotnetNuGetRepackTasksVersion>
     <MicrosoftDotNetSignToolVersion Condition="'$(MicrosoftDotNetSignToolVersion)' == ''">$(ArcadeSdkVersion)</MicrosoftDotNetSignToolVersion>
+    <MicrosoftDotNetTarVersion Condition="'$(MicrosoftDotNetTarVersion)' == ''">$(ArcadeSdkVersion)</MicrosoftDotNetTarVersion>
     <MicrosoftTestPlatformVersion Condition="'$(MicrosoftTestPlatformVersion)' == ''">16.5.0</MicrosoftTestPlatformVersion>
-    <XUnitVersion Condition="'$(XUnitVersion)' == ''">2.4.2</XUnitVersion>
-    <XUnitAnalyzersVersion Condition="'$(XUnitAnalyzersVersion)' == ''">1.1.0</XUnitAnalyzersVersion>
+
+    <!-- Follow the instructions on how to update any of the below xunit versions: https://github.com/dotnet/arcade/blob/main/Documentation/update-xunit.md. -->
+    <XUnitVersion Condition="'$(XUnitVersion)' == ''">2.6.7-pre.5</XUnitVersion>
+    <XUnitAnalyzersVersion Condition="'$(XUnitAnalyzersVersion)' == ''">1.10.0</XUnitAnalyzersVersion>
     <XUnitRunnerConsoleVersion Condition="'$(XUnitRunnerConsoleVersion)' == ''">$(XUnitVersion)</XUnitRunnerConsoleVersion>
-    <!-- Version 2.4.3 of xunit.runner.visualstudio was released to fix testing of net5 projects without updating any other xunit packages -->
-    <XUnitRunnerVisualStudioVersion Condition="'$(XUnitRunnerVisualStudioVersion)' == ''">2.4.3</XUnitRunnerVisualStudioVersion>
+    <XUnitRunnerVisualStudioVersion Condition="'$(XUnitRunnerVisualStudioVersion)' == ''">2.5.7-pre.8</XUnitRunnerVisualStudioVersion>
+
     <MSTestVersion Condition="'$(MSTestVersion)' == ''">2.0.0</MSTestVersion>
     <MSTestTestAdapterVersion Condition="'$(MSTestTestAdapterVersion)' == ''">$(MSTestVersion)</MSTestTestAdapterVersion>
     <MSTestTestFrameworkVersion Condition="'$(MSTestTestFrameworkVersion)' == ''">$(MSTestVersion)</MSTestTestFrameworkVersion>
@@ -106,7 +103,7 @@
     <MicrosoftVisualStudioEngMicroBuildCoreVersion Condition="'$(MicrosoftVisualStudioEngMicroBuildCoreVersion)' == ''">1.0.0</MicrosoftVisualStudioEngMicroBuildCoreVersion>
     <MicrosoftManifestToolCrossPlatformVersion Condition="'$(MicrosoftManifestToolCrossPlatformVersion)' == ''">2.1.3</MicrosoftManifestToolCrossPlatformVersion>
     <MicrosoftVisualStudioEngMicroBuildPluginsSwixBuildVersion Condition="'$(MicrosoftVisualStudioEngMicroBuildPluginsSwixBuildVersion)' == ''">1.1.286</MicrosoftVisualStudioEngMicroBuildPluginsSwixBuildVersion>
-    <MicrosoftSignedWixVersion Condition="'$(MicrosoftSignedWixVersion)' == ''">1.0.0-v3.14.0.5722</MicrosoftSignedWixVersion>
+    <MicrosoftSignedWixVersion Condition="'$(MicrosoftSignedWixVersion)' == ''">3.14.1-8722.20240403.1</MicrosoftSignedWixVersion>
   </PropertyGroup>
 
   <!-- RestoreSources overrides - defines DotNetRestoreSources variable if available -->
@@ -117,4 +114,5 @@
   <PropertyGroup>
     <IbcOptimizationDataDir Condition="'$(UsingToolVisualStudioIbcTraining)' == 'true'">$(ArtifactsDir)ibc\</IbcOptimizationDataDir>
   </PropertyGroup>
+
 </Project>

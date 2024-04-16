@@ -104,9 +104,15 @@ namespace Microsoft.DotNet.Arcade.Sdk
             if (uri.StartsWith(FileUriProtocol, StringComparison.Ordinal))
             {
                 var filePath = uri.Substring(FileUriProtocol.Length);
-                Log.LogMessage($"Copying '{filePath}' to '{DestinationPath}'");
-                File.Copy(filePath, DestinationPath, overwrite: true);
-                return true;
+
+                if (File.Exists(filePath)) {
+                    Log.LogMessage($"Copying '{filePath}' to '{DestinationPath}'");
+                    File.Copy(filePath, DestinationPath, overwrite: true);
+                    return true;
+                } else {
+                    Log.LogMessage($"'{filePath}' does not exist.");
+                    return false;
+                }
             }
 
             Log.LogMessage($"Downloading '{uri}' to '{DestinationPath}'");
@@ -177,6 +183,7 @@ namespace Microsoft.DotNet.Arcade.Sdk
                     }
 
                     Log.LogMessage($"Retrying download of '{uri}' to '{DestinationPath}' due to failure: '{e.Message}' ({attempt}/{Retries})");
+                    Log.LogErrorFromException(e, true, true, null);
 
                     await Tasks.Task.Delay(RetryDelayMilliseconds).ConfigureAwait(false);
                     continue;

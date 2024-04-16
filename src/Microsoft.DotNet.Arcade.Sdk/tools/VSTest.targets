@@ -1,8 +1,9 @@
 <!-- Licensed to the .NET Foundation under one or more agreements. The .NET Foundation licenses this file to you under the MIT license. -->
 <Project>
+
   <Target Name="RunTests"
           Outputs="%(TestToRun.ResultsStdOutPath)"
-          Condition="'$(SkipTests)' != 'true'">
+          Condition="'$(SkipTests)' != 'true' and '@(TestToRun)' != ''">
     <PropertyGroup>
       <_TestEnvironment>%(TestToRun.EnvironmentDisplay)</_TestEnvironment>
       <_TestAssembly>%(TestToRun.Identity)</_TestAssembly>
@@ -76,4 +77,5 @@
       <FileWrites Include="@(_OutputFiles)"/>
     </ItemGroup>
   </Target>
+
 </Project>

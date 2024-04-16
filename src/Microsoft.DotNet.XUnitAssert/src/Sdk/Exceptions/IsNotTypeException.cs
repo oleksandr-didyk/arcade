@@ -3,32 +3,45 @@
 #endif
 
 using System;
+using System.Globalization;
 
 namespace Xunit.Sdk
 {
 	/// <summary>
-	/// Exception thrown when the value is unexpectedly of the exact given type.
+	/// Exception thrown when Assert.IsNotType fails.
 	/// </summary>
 #if XUNIT_VISIBILITY_INTERNAL
 	internal
 #else
 	public
 #endif
-	class IsNotTypeException : AssertActualExpectedException
+	partial class IsNotTypeException : XunitException
 	{
-		/// <summary>
-		/// Creates a new instance of the <see cref="IsNotTypeException"/> class.
-		/// </summary>
-		/// <param name="expected">The expected type</param>
-		/// <param name="actual">The actual object value</param>
-		public IsNotTypeException(
-			Type expected,
-#if XUNIT_NULLABLE
-			object? actual) :
-#else
-			object actual) :
-#endif
-				base(expected, actual?.GetType(), "Assert.IsNotType() Failure")
+		IsNotTypeException(string message) :
+			base(message)
 		{ }
+
+		/// <summary>
+		/// Creates a new instance of the <see cref="IsNotTypeException"/> class to be thrown
+		/// when the object is the exact type.
+		/// </summary>
+		/// <param name="type">The expected type</param>
+		public static IsNotTypeException ForExactType(Type type)
+		{
+			Assert.GuardArgumentNotNull(nameof(type), type);
+
+			var formattedType = ArgumentFormatter.Format(type);
+
+			return new IsNotTypeException(
+				string.Format(
+					CultureInfo.CurrentCulture,
+					"Assert.IsNotType() Failure: Value is the exact type{0}Expected: {1}{2}Actual:   {3}",
+					Environment.NewLine,
+					formattedType,
+					Environment.NewLine,
+					formattedType
+				)
+			);
+		}
 	}
 }

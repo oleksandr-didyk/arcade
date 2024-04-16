@@ -1,9 +1,13 @@
 #if XUNIT_NULLABLE
 #nullable enable
+#else
+// In case this is source-imported with global nullable enabled but no XUNIT_NULLABLE
+#pragma warning disable CS8603
 #endif
 
 using System;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Xunit
 {
@@ -41,6 +45,40 @@ namespace Xunit
 			object b)
 		{
 			throw new InvalidOperationException("Assert.ReferenceEquals should not be used");
+		}
+
+		/// <summary>
+		/// Safely perform <see cref="Type.GetGenericTypeDefinition"/>, returning <c>null</c> when the
+		/// type is not generic.
+		/// </summary>
+		/// <param name="type">The potentially generic type</param>
+		/// <returns>The generic type definition, when <paramref name="type"/> is generic; <c>null</c>, otherwise.</returns>
+		[return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)]
+		[UnconditionalSuppressMessage("Trimmability", "IL2073", Justification = "The interfaces on a generic type definition won't be trimmed if they're preserved for an instantation.")]
+#if XUNIT_NULLABLE
+		static Type? SafeGetGenericTypeDefinition([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type? type)
+#else
+		static Type SafeGetGenericTypeDefinition([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type type)
+#endif
+		{
+			if (type == null)
+				return null;
+
+#if NETSTANDARD2_0_OR_GREATER || NETCOREAPP2_0_OR_GREATER || NETFRAMEWORK
+			if (!type.IsGenericType)
+				return null;
+#endif
+
+			// We need try/catch for target frameworks that don't support IsGenericType; notably, this
+			// would include .NET Core 1.x and .NET Standard 1.x, which are still supported for v2.
+			try
+			{
+				return type.GetGenericTypeDefinition();
+			}
+			catch (InvalidOperationException)
+			{
+				return null;
+			}
 		}
 	}
 }
